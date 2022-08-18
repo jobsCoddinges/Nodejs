@@ -1,13 +1,14 @@
 const express = require("express");
 const app = express();
 const fs = require("fs");
-var path = require("path");
-var qs = require("querystring");
+const indexRouter = require("./routes/index");
 var compression = require("compression");
-var sanitizeHtml = require("sanitize-html");
+const helmet = require("helmet");
+var topicRoutes = require("./routes/topic");
 app.use(express.urlencoded({ extended: true }));
 app.use(compression());
 app.use(express.static("public"));
+app.use(helmet());
 app.get("*", (request, response, next) => {
   fs.readdir("./data", (err, filelist) => {
     request.list = filelist;
@@ -16,127 +17,9 @@ app.get("*", (request, response, next) => {
 });
 
 var template = require("./lib/template.js");
-app.get("/", (request, response) => {
-  var title = "Welcome";
-  var description = "Hello, Node.js";
-  var list = template.list(request.list);
-  var html = template.HTML(
-    title,
-    list,
-    `<h2>${title}</h2>${description}
-    <img src="./images/coding.jpg" style="width:300px; display:block;" />
-    `,
-    `<a href="/create">create</a>`
-  );
-  response.send(html);
-});
 
-app.get("/page/:pageId", (request, response, next) => {
-  var filteredId = path.parse(request.params.pageId).base;
-  fs.readFile(`data/${filteredId}`, "utf8", function (err, description) {
-    if (err) {
-      next(err);
-    } else {
-      var title = request.params.pageId;
-      var sanitizedTitle = sanitizeHtml(title);
-      var sanitizedDescription = sanitizeHtml(description, {
-        allowedTags: ["h1"],
-      });
-      var list = template.list(request.list);
-      var html = template.HTML(
-        sanitizedTitle,
-        list,
-        `<h2>${sanitizedTitle}</h2>${sanitizedDescription}`,
-        ` <a href="/create">create</a>
-            <a href="/update/${sanitizedTitle}">update</a>
-            <form action="delete_process" method="post">
-              <input type="hidden" name="id" value="${sanitizedTitle}">
-              <input type="submit" value="delete">
-            </form>`
-      );
-      response.send(html);
-    }
-  });
-});
-
-app.get("/create", (request, response) => {
-  var title = "WEB - create";
-  var list = template.list(request.list);
-  var html = template.HTML(
-    title,
-    list,
-    `
-      <form action="/create_process" method="post">
-        <p><input type="text" name="title" placeholder="title"></p>
-        <p>
-          <textarea name="description" placeholder="description"></textarea>
-        </p>
-        <p>
-          <input type="submit">
-        </p>
-      </form>
-    `,
-    ""
-  );
-  response.send(html);
-});
-
-app.post("/create_process", (request, response) => {
-  var post = request.body;
-  var title = post.title;
-  var description = post.description;
-  fs.writeFile(`data/${title}`, description, "utf8", function (err) {
-    response.redirect(302, `/page/${title}`);
-  });
-});
-
-app.get("/update/:pageId", (request, response) => {
-  var filteredId = path.parse(request.params.pageId).base;
-  fs.readFile(`data/${filteredId}`, "utf8", function (err, description) {
-    var title = request.params.pageId;
-    var list = template.list(request.list);
-    var html = template.HTML(
-      title,
-      list,
-      `
-        <form action="/update_process" method="post">
-          <input type="hidden" name="id" value="${title}">
-          <p><input type="text" name="title" placeholder="title" value="${title}"></p>
-          <p>
-            <textarea name="description" placeholder="description">${description}</textarea>
-          </p>
-          <p>
-            <input type="submit">
-          </p>
-        </form>
-        `,
-      `<a href="/create">create</a> <a href="/update?id=${title}">update</a>`
-    );
-    response.writeHead(200);
-    response.end(html);
-  });
-});
-
-app.post("/update_process", (request, response) => {
-  var post = request.body;
-  var id = post.id;
-  var title = post.title;
-  var description = post.description;
-  fs.rename(`data/${id}`, `data/${title}`, function (error) {
-    fs.writeFile(`data/${title}`, description, "utf8", function (err) {
-      response.redirect(`/page/${title}`);
-    });
-  });
-});
-
-app.post("/page/delete_process", (request, response) => {
-  var post = request.body;
-  var id = post.id;
-  var filteredId = path.parse(id).base;
-  fs.unlink(`data/${filteredId}`, function (error) {
-    response.redirect("/");
-  });
-});
+app.use("/topic", topicRoutes);
+app.use("/", indexRouter);
 
 app.use((req, res, next) => {
   res.status(404).send("Sorry cant find that");
